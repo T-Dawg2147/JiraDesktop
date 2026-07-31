@@ -1,9 +1,17 @@
-﻿using System.Windows;
+using System.Windows;
 
-namespace JiraDashboardApp.Wpf.Services;
+namespace JiraDesktop.Wpf.Services;
 
+/// <summary>
+/// Switches the active WPF theme by swapping the top-level theme <see cref="ResourceDictionary"/>
+/// in <see cref="Application.Current"/> resources.
+/// </summary>
 public class ThemeService
 {
+    /// <summary>
+    /// Applies the named theme by replacing the currently loaded theme dictionary.
+    /// Supported names: "JiraLight", "JiraDark".
+    /// </summary>
     public void ApplyTheme(string themeName)
     {
         var app = Application.Current;

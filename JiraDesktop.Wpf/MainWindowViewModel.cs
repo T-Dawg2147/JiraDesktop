@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Media;
@@ -6,13 +6,20 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
-using JiraDashboardApp.Core.Interfaces;
-using JiraDashboardApp.Core.Models;
-using JiraDashboardApp.Infrastructure.Services;
-using JiraDashboardApp.Wpf.Services;
+using JiraDesktop.Core.Interfaces;
+using JiraDesktop.Core.Models;
+using JiraDesktop.Core.Services;
+using JiraDesktop.Wpf.Commands;
+using JiraDesktop.Wpf.Services;
 
-namespace JiraDashboardApp.Wpf;
+namespace JiraDesktop.Wpf;
 
+/// <summary>
+/// View model for <see cref="MainWindow"/>. Owns all presentation state and orchestrates
+/// data loading, filtering, pagination, notifications, and settings persistence.
+/// Consumes only interfaces and services from <c>JiraDesktop.Core</c>; no direct Jira API
+/// calls are made here.
+/// </summary>
 public class MainWindowViewModel : INotifyPropertyChanged
 {
     private readonly DashboardService _dashboardService;
@@ -43,7 +50,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     private bool _enableNotificationSound;
     private string _pageSizeText = "50";
     private string _syncIntervalSecondsText = "60";
-    
+
     private string _selectedTheme = "JiraLight";
 
     private int _currentPage = 1;
@@ -58,7 +65,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public ObservableCollection<WorkItem> Items { get; } = new();
     public ObservableCollection<string> ProductManagers { get; } = new() { "All" };
     public ObservableCollection<string> Assignees { get; } = new() { "All" };
-    
+
     public ObservableCollection<string> Themes { get; } = new() { "JiraLight", "JiraDark" };
 
     public ICommand ToggleDrawerCommand { get; }
@@ -89,6 +96,10 @@ public class MainWindowViewModel : INotifyPropertyChanged
         PrevPageCommand = new RelayCommand(_ => PrevPage(), _ => _currentPage > 1);
     }
 
+    /// <summary>
+    /// Called by <see cref="MainWindow"/> after the window is fully loaded.
+    /// Restores persisted settings, applies the theme, and kicks off the initial sync.
+    /// </summary>
     public async Task InitializeAsync(Window window)
     {
         var s = await _settingsService.LoadAsync();
@@ -102,7 +113,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         SyncIntervalSecondsText = s.SyncIntervalSeconds.ToString();
         SearchText = s.SearchText;
         HideDone = s.HideDone;
-        
+
         SelectedTheme = string.IsNullOrWhiteSpace(s.ThemeName) ? "JiraLight" : s.ThemeName;
         _themeService.ApplyTheme(SelectedTheme);
 
@@ -148,7 +159,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public string SelectedTheme { get => _selectedTheme; set { if (_selectedTheme == value) return; _selectedTheme = value; OnPropertyChanged(); _themeService.ApplyTheme(_selectedTheme); QueueAutosave(); } }
-    
+
     public string PageText => $"Page {_currentPage} / {_totalPages}";
 
     private async Task AutoConnectAndSyncAsync()
@@ -168,7 +179,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
             StatusText = $"Startup connect failed: {ex.Message}";
         }
     }
-    
+
+    /// <summary>Forces the data grid to refresh its visual state (e.g. after clearing pulse flags).</summary>
     public void RefreshGrid()
     {
         OnPropertyChanged(nameof(Items));
@@ -195,7 +207,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 .OrderByDescending(ParseKeyNumber)
                 .ThenByDescending(x => x.Updated)
                 .ToList();
-            
+
             DetectChangesAgainstPreviousSnapshot(result.Items.ToList());
 
             _lastSeenUpdatedByKey = _allItems.ToDictionary(x => x.Key, x => x.Updated);
@@ -207,8 +219,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
             SelectedProductManager = previousPm;
             SelectedAssignee = previousAssignee;
-            
-            
 
             ResetToFirstPageAndRebuild();
 
@@ -226,7 +236,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
             IsBusy = false;
         }
     }
-    
+
+    /// <summary>Opens the work item's Jira URL in the default browser.</summary>
     public void OpenWorkItemInBrowser(WorkItem item)
     {
         try
@@ -274,7 +285,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
             {
                 item.IsPulseActive = false;
             }
-
         }
     }
 
@@ -299,7 +309,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         List<string> allPmOptions;
         try
         {
-            allPmOptions = await _dashboardService.GetAllProductManagerOptionsAsync(); // add pass-through in DashboardService
+            allPmOptions = await _dashboardService.GetAllProductManagerOptionsAsync();
         }
         catch
         {
@@ -393,7 +403,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!EnableChangeNotifications || currentItems.Count == 0) return;
 
-        var watched = string.IsNullOrWhiteSpace(WatchedProductManager) ? "All" : WatchedProductManager;
         var changedWatched = currentItems.Where(i =>
             i.HasDetectedChanges &&
             (WatchedProductManager == "All" ||
@@ -408,7 +417,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
         if (EnableNotificationSound) SystemSounds.Asterisk.Play();
     }
-    
+
+    /// <summary>Applies a manual column sort to the displayed items.</summary>
     public void ApplyManualSort(string sortField, ListSortDirection direction)
     {
         Func<WorkItem, object?> selector = sortField switch
@@ -432,7 +442,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
         _currentPage = 1;
         RebuildVisibleItems();
     }
-    
+
+    /// <summary>Persists the current settings state to disk, optionally including the window's current geometry.</summary>
     public async Task SaveSettingsAsync(Window? window = null)
     {
         await _settingsService.SaveAsync(new UserWidgetSettings

@@ -1,11 +1,15 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace JiraDashboardApp.Wpf.Converters;
+namespace JiraDesktop.Wpf.Converters;
 
+/// <summary>
+/// Converts a Jira status name to a coloured background <see cref="Brush"/> for the status badge in the grid.
+/// </summary>
 public class StatusToBrushConverter : IValueConverter
 {
+    /// <inheritdoc/>
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         var status = (value?.ToString() ?? "").Trim().ToLowerInvariant();
@@ -19,6 +23,7 @@ public class StatusToBrushConverter : IValueConverter
         return new SolidColorBrush(Color.FromRgb(148, 163, 184)); // neutral
     }
 
+    /// <inheritdoc/>
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => Binding.DoNothing;
 }
