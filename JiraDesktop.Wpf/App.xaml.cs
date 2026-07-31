@@ -1,16 +1,21 @@
-﻿using System.Windows;
-using JiraDashboardApp.Core.Interfaces;
-using JiraDashboardApp.Core.Options;
-using JiraDashboardApp.Infrastructure.Services;
-using JiraDashboardApp.Wpf.Services;
+using System.Windows;
+using JiraDesktop.Core.Configuration;
+using JiraDesktop.Core.Interfaces;
+using JiraDesktop.Core.Services;
+using JiraDesktop.Wpf.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace JiraDashboardApp.Wpf;
+namespace JiraDesktop.Wpf;
 
+/// <summary>
+/// Application entry point. Bootstraps the .NET Generic Host, registers all services
+/// via dependency injection, and launches the main window.
+/// </summary>
 public partial class App : Application
 {
+    /// <summary>The application's DI host, accessible for manual service resolution if needed.</summary>
     public static IHost AppHost { get; private set; } = null!;
 
     public App()
@@ -23,18 +28,22 @@ public partial class App : Application
             })
             .ConfigureServices((context, services) =>
             {
+                // Configuration
                 services.Configure<JiraOptions>(context.Configuration.GetSection("Jira"));
                 services.Configure<JiraOAuthOptions>(context.Configuration.GetSection("JiraOAuth"));
 
+                // Core services
                 services.AddSingleton<IWorkItemCacheService, FileWorkItemCacheService>();
                 services.AddHttpClient<IJiraOAuthService, JiraOAuthService>();
                 services.AddHttpClient<IJiraService, JiraService>();
-
                 services.AddSingleton<DashboardService>();
-                services.AddSingleton<ThemeService>();
                 services.AddSingleton<UserSettingsService>();
+
+                // WPF-specific services
+                services.AddSingleton<ThemeService>();
                 services.AddSingleton<ToastService>();
 
+                // View models and windows
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
             })

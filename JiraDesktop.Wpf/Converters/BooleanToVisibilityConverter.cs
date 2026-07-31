@@ -21,9 +21,9 @@ public sealed class BooleanToVisibilityConverter : IValueConverter
         {
             bValue = b;
         }
-        else if (value is bool? nb)
+        else if (value is bool nb)
         {
-            bValue = nb ?? false;
+            bValue = nb;
         }
         return bValue ? Visibility.Visible : Visibility.Collapsed;
     }

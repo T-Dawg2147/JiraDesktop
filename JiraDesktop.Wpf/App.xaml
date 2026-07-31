@@ -1,11 +1,11 @@
-﻿<Application x:Class="JiraDashboardApp.Wpf.App"
+<Application x:Class="JiraDesktop.Wpf.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="clr-namespace:JiraDashboardApp.Wpf.Converters">
+             xmlns:converters="clr-namespace:JiraDesktop.Wpf.Converters">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- default -->
+                <!-- default theme; swapped at runtime by ThemeService -->
                 <ResourceDictionary Source="Themes/JiraLight.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 

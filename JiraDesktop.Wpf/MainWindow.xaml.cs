@@ -1,11 +1,15 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using JiraDashboardApp.Core.Models;
+using JiraDesktop.Core.Models;
 
-namespace JiraDashboardApp.Wpf;
+namespace JiraDesktop.Wpf;
 
+/// <summary>
+/// Code-behind for the main application window. Delegates all logic to <see cref="MainWindowViewModel"/>
+/// and handles WPF-specific event routing (grid sorting, double-click, selection changed).
+/// </summary>
 public partial class MainWindow : Window
 {
     private readonly MainWindowViewModel _vm;
