@@ -1,0 +1,18 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="Bg">#FF1D2125</Color>
+    <Color x:Key="Panel">#FF22272B</Color>
+    <Color x:Key="Border">#FF3C444C</Color>
+    <Color x:Key="Text">#FFDEE4EA</Color>
+    <Color x:Key="Subtle">#FF9FADBC</Color>
+    <Color x:Key="Primary">#FF579DFF</Color>
+    <Color x:Key="PrimaryHover">#FF85B8FF</Color>
+
+    <SolidColorBrush x:Key="BrushBg" Color="{StaticResource Bg}" />
+    <SolidColorBrush x:Key="BrushPanel" Color="{StaticResource Panel}" />
+    <SolidColorBrush x:Key="BrushBorder" Color="{StaticResource Border}" />
+    <SolidColorBrush x:Key="BrushText" Color="{StaticResource Text}" />
+    <SolidColorBrush x:Key="BrushSubtle" Color="{StaticResource Subtle}" />
+    <SolidColorBrush x:Key="BrushPrimary" Color="{StaticResource Primary}" />
+    <SolidColorBrush x:Key="BrushPrimaryHover" Color="{StaticResource PrimaryHover}" />
+</ResourceDictionary>

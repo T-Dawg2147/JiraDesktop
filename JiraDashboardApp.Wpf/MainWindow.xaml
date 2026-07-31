@@ -1,0 +1,191 @@
+﻿<Window x:Class="JiraDashboardApp.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:conv="clr-namespace:JiraDashboardApp.Wpf.Converters"
+        mc:Ignorable="d"
+        Title="Jira Monitor Widget"
+        Height="470" Width="760"
+        MinHeight="320" MinWidth="560"
+        WindowStartupLocation="Manual"
+        Topmost="{Binding AlwaysOnTop}">
+    <Grid Margin="8">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="{Binding DrawerWidth}" />
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Padding="8" CornerRadius="8" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1">
+                <WrapPanel VerticalAlignment="Center">
+                    <Button Content="☰" Width="32" Height="28" Margin="0,0,8,0" Command="{Binding ToggleDrawerCommand}" />
+                    <TextBlock Text="PM:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <ComboBox Width="120" Margin="0,0,8,0" ItemsSource="{Binding ProductManagers}" SelectedItem="{Binding SelectedProductManager}" />
+                    <TextBlock Text="Assignee:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <ComboBox Width="140" Margin="0,0,8,0" ItemsSource="{Binding Assignees}" SelectedItem="{Binding SelectedAssignee}" />
+                    <CheckBox Content="Changed only" Margin="0,0,8,0" IsChecked="{Binding ShowChangedOnly}" />
+                    <CheckBox Content="Hide Done" Margin="0,0,8,0" IsChecked="{Binding HideDone}" />
+                    <TextBox Width="160" Height="26" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                </WrapPanel>
+            </Border>
+
+            <Border Grid.Row="1" Margin="0,8,0,8" Padding="6" CornerRadius="8" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1">
+                <DataGrid x:Name="IssuesGrid"
+                          ItemsSource="{Binding Items}"
+                          SelectedItem="{Binding SelectedWorkItem}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          RowHeaderWidth="0"
+                          HeadersVisibility="Column"
+                          Sorting="IssuesGrid_OnSorting"
+                          MouseDoubleClick="IssuesGrid_OnMouseDoubleClick"
+                          SelectionChanged="IssuesGrid_OnSelectionChanged">
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="ToolTip">
+                                <Setter.Value>
+                                    <ToolTip MaxWidth="420">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="Bold" Text="{Binding Key}" />
+                                            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,2,0,6" />
+                                            <ItemsControl ItemsSource="{Binding Changes}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,2">
+                                                            <Run Text="{Binding Field}" FontWeight="Bold"/>
+                                                            <Run Text=": "/>
+                                                            <Run Text="{Binding FromValue}"/>
+                                                            <Run Text=" → "/>
+                                                            <Run Text="{Binding ToValue}"/>
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </ToolTip>
+                                </Setter.Value>
+                            </Setter>
+
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasDetectedChanges}" Value="True">
+                                    <Setter Property="Background" Value="#FFFFF2CC"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsPulseActive}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="PulseStoryboard">
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <ColorAnimation Storyboard.TargetProperty="(DataGridRow.Background).(SolidColorBrush.Color)"
+                                                                To="#FFFFE08A" Duration="0:0:0.8"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="PulseStoryboard"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Key" Width="90" SortMemberPath="Key">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Key}"
+                                               Foreground="{StaticResource BrushPrimary}"
+                                               TextDecorations="Underline"
+                                               Cursor="Hand"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="*" />
+                        <DataGridTextColumn Header="Assignee" Binding="{Binding Assignee}" Width="130" />
+                        <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="90" />
+
+                        <DataGridTemplateColumn Header="Status" Width="130" SortMemberPath="Status">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="10"
+                                            Padding="8,2"
+                                            Background="{Binding Status, Converter={StaticResource StatusToBrushConverter}}">
+                                        <TextBlock Text="{Binding Status}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <DataGridTemplateColumn Header="Due" Width="90" SortMemberPath="DueDate">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Padding="4,1"
+                                            CornerRadius="4"
+                                            Background="{Binding DueDate, Converter={StaticResource DueDateStateConverter}}">
+                                        <TextBlock Text="{Binding DueDate, StringFormat={}{0:dd MMM}}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <DockPanel Grid.Row="2" Margin="0,0,0,6">
+                <TextBlock Text="{Binding StatusText}" />
+                <TextBlock Text="{Binding LastSyncText}" Foreground="{StaticResource BrushSubtle}" DockPanel.Dock="Right" />
+            </DockPanel>
+
+            <Border Grid.Row="3" Padding="8" CornerRadius="8" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="◀ Prev" Width="72" Margin="0,0,8,0" Command="{Binding PrevPageCommand}" />
+                    <Button Content="Next ▶" Width="72" Margin="0,0,12,0" Command="{Binding NextPageCommand}" />
+                    <TextBlock Text="{Binding PageText}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Column="1" Margin="8,0,0,0" Padding="10"
+                Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8"
+                Visibility="{Binding IsDrawerOpen, Converter={x:Static conv:BooleanToVisibilityConverter.Instance}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="Settings" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <Button Content="Sync now" Width="90" Margin="0,0,0,10" Command="{Binding SyncCommand}" />
+                    <CheckBox Content="Always on top" IsChecked="{Binding AlwaysOnTop}" Margin="0,0,0,6"/>
+                    <CheckBox Content="Auto-hide drawer on focus loss" IsChecked="{Binding AutoHideDrawerOnFocusLoss}" Margin="0,0,0,12"/>
+
+                    <TextBlock Text="Theme" Foreground="{StaticResource BrushSubtle}" />
+                    <ComboBox Margin="0,4,0,10" ItemsSource="{Binding Themes}" SelectedItem="{Binding SelectedTheme}" />
+
+                    <TextBlock Text="Watched Product Manager" Foreground="{StaticResource BrushSubtle}" />
+                    <ComboBox Margin="0,4,0,10" ItemsSource="{Binding ProductManagers}" SelectedItem="{Binding WatchedProductManager}" />
+
+                    <CheckBox Content="Enable change notifications" IsChecked="{Binding EnableChangeNotifications}" Margin="0,0,0,6"/>
+                    <CheckBox Content="Notification sound" IsChecked="{Binding EnableNotificationSound}" Margin="0,0,0,12"/>
+
+                    <TextBlock Text="Page size" Foreground="{StaticResource BrushSubtle}"/>
+                    <TextBox Margin="0,4,0,10" Text="{Binding PageSizeText, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <TextBlock Text="Sync interval seconds" Foreground="{StaticResource BrushSubtle}"/>
+                    <TextBox Margin="0,4,0,10" Text="{Binding SyncIntervalSecondsText, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <Button Content="Snap bottom-right" Width="130" Margin="0,0,0,10" Command="{Binding SnapBottomRightCommand}" />
+
+                    <WrapPanel>
+                        <Button Content="Save now" Width="90" Margin="0,0,8,0" Command="{Binding SaveSettingsCommand}"/>
+                        <Button Content="Close" Width="70" Command="{Binding ToggleDrawerCommand}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</Window>
