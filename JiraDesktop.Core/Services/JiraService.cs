@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using JiraDesktop.Core.Configuration;
 using JiraDesktop.Core.Interfaces;
@@ -7,17 +8,11 @@ using Microsoft.Extensions.Options;
 
 namespace JiraDesktop.Core.Services;
 
-/// <summary>
-/// Communicates with the Jira Cloud REST API to retrieve work items and field metadata.
-/// Uses OAuth bearer tokens obtained via <see cref="IJiraOAuthService"/>.
-/// </summary>
-public class JiraService : IJiraService
+public sealed class JiraService : IJiraService
 {
     private readonly HttpClient _httpClient;
     private readonly JiraOptions _options;
     private readonly IJiraOAuthService _oauth;
-
-    /// <summary>Jira Cloud REST API v3 base path template; requires cloudId substitution.</summary>
     private const string JiraApiBase = "https://api.atlassian.com/ex/jira/{0}/rest/api/3";
 
     public JiraService(HttpClient httpClient, IOptions<JiraOptions> options, IJiraOAuthService oauth)
@@ -27,17 +22,13 @@ public class JiraService : IJiraService
         _oauth = oauth;
     }
 
-    /// <inheritdoc/>
-    public async Task<List<WorkItem>> GetWorkItemsAsync(string? productManager, string? assignee, CancellationToken cancellationToken = default)
+    public async Task<List<WorkItem>> GetWorkItemsAsync(CancellationToken cancellationToken = default)
     {
         var accessToken = await _oauth.GetValidAccessTokenAsync(cancellationToken);
         var cloudId = await _oauth.GetCloudIdAsync(cancellationToken);
-
-        var jql = BuildJql(productManager, assignee);
-
         var allWorkItems = new List<WorkItem>();
         var startAt = 0;
-        const int pageSize = 100;
+        var pageSize = Math.Clamp(_options.MaxResults, 1, 100);
 
         while (true)
         {
@@ -52,24 +43,20 @@ public class JiraService : IJiraService
 
             var url =
                 $"{string.Format(JiraApiBase, cloudId)}/search/jql" +
-                $"?jql={Uri.EscapeDataString(jql)}" +
+                $"?jql={Uri.EscapeDataString(BuildJql())}" +
                 $"&startAt={startAt}" +
                 $"&maxResults={pageSize}" +
                 $"&fields={Uri.EscapeDataString(fieldsCsv)}";
 
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            req.Headers.Accept.ParseAdd("application/json");
-
+            using var req = CreateRequest(HttpMethod.Get, url, accessToken);
             using var response = await _httpClient.SendAsync(req, cancellationToken);
             var raw = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)
-                throw new Exception($"Jira search/jql failed {(int)response.StatusCode}: {raw}");
+                throw new InvalidOperationException($"Jira search failed {(int)response.StatusCode}: {raw}");
 
             using var doc = JsonDocument.Parse(raw);
             var root = doc.RootElement;
-
             if (!root.TryGetProperty("issues", out var issuesEl) || issuesEl.ValueKind != JsonValueKind.Array)
                 break;
 
@@ -90,15 +77,13 @@ public class JiraService : IJiraService
         return allWorkItems;
     }
 
-    /// <inheritdoc/>
     public async Task<List<string>> GetAllProductManagerOptionsAsync(CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_options.ProductManagerFieldId) || _options.ProductManagerFieldContextId <= 0)
-            return new List<string>();
+            return [];
 
         var accessToken = await _oauth.GetValidAccessTokenAsync(cancellationToken);
         var cloudId = await _oauth.GetCloudIdAsync(cancellationToken);
-
         var options = new List<string>();
         var startAt = 0;
         const int pageSize = 100;
@@ -109,42 +94,101 @@ public class JiraService : IJiraService
                 $"{string.Format(JiraApiBase, cloudId)}/field/{_options.ProductManagerFieldId}/context/{_options.ProductManagerFieldContextId}/option" +
                 $"?startAt={startAt}&maxResults={pageSize}";
 
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            req.Headers.Accept.ParseAdd("application/json");
+            using var req = CreateRequest(HttpMethod.Get, url, accessToken);
+            using var response = await _httpClient.SendAsync(req, cancellationToken);
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            using var resp = await _httpClient.SendAsync(req, cancellationToken);
-            var raw = await resp.Content.ReadAsStringAsync(cancellationToken);
-
-            if (!resp.IsSuccessStatusCode)
-                throw new Exception($"PM options load failed {(int)resp.StatusCode}: {raw}");
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException($"Product manager option load failed {(int)response.StatusCode}: {raw}");
 
             using var doc = JsonDocument.Parse(raw);
             var root = doc.RootElement;
-
             if (!root.TryGetProperty("values", out var valuesEl) || valuesEl.ValueKind != JsonValueKind.Array)
                 break;
 
             var count = 0;
-            foreach (var v in valuesEl.EnumerateArray())
+            foreach (var valueEl in valuesEl.EnumerateArray())
             {
                 count++;
-                if (v.TryGetProperty("value", out var valueEl))
-                {
-                    var value = valueEl.GetString();
-                    if (!string.IsNullOrWhiteSpace(value))
-                        options.Add(value.Trim());
-                }
+                if (!valueEl.TryGetProperty("value", out var optionEl))
+                    continue;
+
+                var value = optionEl.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
+                    options.Add(value.Trim());
             }
 
             var total = root.TryGetProperty("total", out var totalEl) ? totalEl.GetInt32() : options.Count;
             startAt += count;
-
             if (count == 0 || startAt >= total)
                 break;
         }
 
-        return options.Distinct().OrderBy(x => x).ToList();
+        return options
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+    }
+
+    public async Task<List<JiraStatusTransition>> GetAvailableTransitionsAsync(string issueKey, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(issueKey))
+            return [];
+
+        var accessToken = await _oauth.GetValidAccessTokenAsync(cancellationToken);
+        var cloudId = await _oauth.GetCloudIdAsync(cancellationToken);
+        var url = $"{string.Format(JiraApiBase, cloudId)}/issue/{Uri.EscapeDataString(issueKey)}/transitions";
+
+        using var req = CreateRequest(HttpMethod.Get, url, accessToken);
+        using var response = await _httpClient.SendAsync(req, cancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Transition load failed {(int)response.StatusCode}: {raw}");
+
+        using var doc = JsonDocument.Parse(raw);
+        if (!doc.RootElement.TryGetProperty("transitions", out var transitionsEl) || transitionsEl.ValueKind != JsonValueKind.Array)
+            return [];
+
+        return transitionsEl.EnumerateArray()
+            .Select(MapTransition)
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id) && !string.IsNullOrWhiteSpace(x.Name))
+            .GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .OrderBy(x => x.Name)
+            .ToList();
+    }
+
+    public async Task UpdateWorkItemStatusAsync(string issueKey, string transitionId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(issueKey))
+            throw new ArgumentException("Issue key is required.", nameof(issueKey));
+        if (string.IsNullOrWhiteSpace(transitionId))
+            throw new ArgumentException("Transition id is required.", nameof(transitionId));
+
+        var accessToken = await _oauth.GetValidAccessTokenAsync(cancellationToken);
+        var cloudId = await _oauth.GetCloudIdAsync(cancellationToken);
+        var url = $"{string.Format(JiraApiBase, cloudId)}/issue/{Uri.EscapeDataString(issueKey)}/transitions";
+
+        using var req = CreateRequest(HttpMethod.Post, url, accessToken);
+        req.Content = new StringContent(JsonSerializer.Serialize(new
+        {
+            transition = new { id = transitionId }
+        }), Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(req, cancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Status update failed {(int)response.StatusCode}: {raw}");
+    }
+
+    private HttpRequestMessage CreateRequest(HttpMethod method, string url, string accessToken)
+    {
+        var req = new HttpRequestMessage(method, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        req.Headers.Accept.ParseAdd("application/json");
+        return req;
     }
 
     private WorkItem MapIssue(JsonElement issue)
@@ -169,22 +213,12 @@ public class JiraService : IJiraService
             : "-";
 
         DateTime? dueDate = null;
-        if (fields.TryGetProperty("duedate", out var dueEl) &&
-            dueEl.ValueKind == JsonValueKind.String &&
-            DateTime.TryParse(dueEl.GetString(), out var dueParsed))
-        {
+        if (fields.TryGetProperty("duedate", out var dueEl) && dueEl.ValueKind == JsonValueKind.String && DateTime.TryParse(dueEl.GetString(), out var dueParsed))
             dueDate = dueParsed;
-        }
 
         var updated = DateTime.UtcNow;
-        if (fields.TryGetProperty("updated", out var updEl) &&
-            updEl.ValueKind == JsonValueKind.String &&
-            DateTime.TryParse(updEl.GetString(), out var updParsed))
-        {
-            updated = updParsed.ToUniversalTime();
-        }
-
-        var pm = ExtractProductManager(fields, _options.ProductManagerFieldId);
+        if (fields.TryGetProperty("updated", out var updatedEl) && updatedEl.ValueKind == JsonValueKind.String && DateTime.TryParse(updatedEl.GetString(), out var updatedParsed))
+            updated = updatedParsed.ToUniversalTime();
 
         return new WorkItem
         {
@@ -195,29 +229,36 @@ public class JiraService : IJiraService
             Status = status,
             DueDate = dueDate,
             Updated = updated,
-            ProductManager = pm,
-            Url = $"{_options.BaseUrl.TrimEnd('/')}/browse/{key}"
+            ProductManager = ExtractProductManager(fields, _options.ProductManagerFieldId),
+            Url = string.IsNullOrWhiteSpace(_options.BaseUrl)
+                ? string.Empty
+                : $"{_options.BaseUrl.TrimEnd('/')}/browse/{key}"
         };
     }
 
-    private string BuildJql(string? productManager, string? assignee)
+    private static JiraStatusTransition MapTransition(JsonElement transition)
     {
-        var clauses = new List<string> { $"project = \"{_options.ProjectKey}\"" };
+        var name = transition.TryGetProperty("to", out var toEl) && toEl.ValueKind == JsonValueKind.Object && toEl.TryGetProperty("name", out var toNameEl)
+            ? toNameEl.GetString() ?? string.Empty
+            : transition.TryGetProperty("name", out var nameEl)
+                ? nameEl.GetString() ?? string.Empty
+                : string.Empty;
 
-        if (!string.IsNullOrWhiteSpace(productManager) && productManager != "All")
-            clauses.Add($"\"Product Managers\" = \"{EscapeJql(productManager)}\"");
-
-        if (!string.IsNullOrWhiteSpace(assignee) && assignee != "All")
-            clauses.Add($"assignee = \"{EscapeJql(assignee)}\"");
-
-        return string.Join(" AND ", clauses) + " ORDER BY created DESC";
+        return new JiraStatusTransition
+        {
+            Id = transition.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty,
+            Name = name
+        };
     }
 
-    private static string EscapeJql(string value) => value.Replace("\"", "\\\"");
+    private string BuildJql()
+        => $"project = \"{EscapeJql(_options.ProjectKey)}\" ORDER BY updated DESC";
+
+    private static string EscapeJql(string value) => (value ?? string.Empty).Replace("\"", "\\\"");
 
     private static string ExtractProductManager(JsonElement fields, string fieldId)
     {
-        if (!fields.TryGetProperty(fieldId, out var pmEl) || pmEl.ValueKind == JsonValueKind.Null)
+        if (string.IsNullOrWhiteSpace(fieldId) || !fields.TryGetProperty(fieldId, out var pmEl) || pmEl.ValueKind == JsonValueKind.Null)
             return string.Empty;
 
         if (pmEl.ValueKind == JsonValueKind.String)
@@ -226,19 +267,18 @@ public class JiraService : IJiraService
         if (pmEl.ValueKind == JsonValueKind.Object && pmEl.TryGetProperty("value", out var valueEl))
             return valueEl.GetString() ?? string.Empty;
 
-        if (pmEl.ValueKind == JsonValueKind.Array)
+        if (pmEl.ValueKind != JsonValueKind.Array)
+            return string.Empty;
+
+        var values = new List<string>();
+        foreach (var item in pmEl.EnumerateArray())
         {
-            var names = new List<string>();
-            foreach (var item in pmEl.EnumerateArray())
-            {
-                if (item.ValueKind == JsonValueKind.String)
-                    names.Add(item.GetString() ?? string.Empty);
-                else if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("value", out var v))
-                    names.Add(v.GetString() ?? string.Empty);
-            }
-            return string.Join(", ", names.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (item.ValueKind == JsonValueKind.String)
+                values.Add(item.GetString() ?? string.Empty);
+            else if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("value", out var nestedValueEl))
+                values.Add(nestedValueEl.GetString() ?? string.Empty);
         }
 
-        return string.Empty;
+        return string.Join(", ", values.Where(x => !string.IsNullOrWhiteSpace(x)));
     }
 }

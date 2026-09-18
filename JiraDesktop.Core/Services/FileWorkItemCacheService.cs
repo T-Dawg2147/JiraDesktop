@@ -4,39 +4,38 @@ using JiraDesktop.Core.Models;
 
 namespace JiraDesktop.Core.Services;
 
-/// <summary>
-/// Persists and loads work item snapshots as a JSON file in the user's local application data folder.
-/// Used by <see cref="DashboardService"/> to compare the current Jira state against the previous sync.
-/// </summary>
-public class FileWorkItemCacheService : IWorkItemCacheService
+public sealed class FileWorkItemCacheService : IWorkItemCacheService
 {
-    private static readonly string CacheDirectory =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JiraDesktop");
+    private static readonly string RootDirectory =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JiraDesktop", "profiles");
 
-    private static readonly string CachePath = Path.Combine(CacheDirectory, "workitem-cache.json");
-
-    /// <inheritdoc/>
-    public async Task<Dictionary<string, WorkItemSnapshot>> LoadAsync(CancellationToken cancellationToken = default)
+    public async Task<Dictionary<string, WorkItemSnapshot>> LoadAsync(string profileId, CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(CachePath))
-            return new Dictionary<string, WorkItemSnapshot>();
+        var cachePath = GetCachePath(profileId);
+        if (!File.Exists(cachePath))
+            return new Dictionary<string, WorkItemSnapshot>(StringComparer.OrdinalIgnoreCase);
 
-        await using var stream = File.OpenRead(CachePath);
+        await using var stream = File.OpenRead(cachePath);
         var result = await JsonSerializer.DeserializeAsync<Dictionary<string, WorkItemSnapshot>>(
             stream,
             cancellationToken: cancellationToken);
 
-        return result ?? new Dictionary<string, WorkItemSnapshot>();
+        return result ?? new Dictionary<string, WorkItemSnapshot>(StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <inheritdoc/>
-    public async Task SaveAsync(IEnumerable<WorkItemSnapshot> snapshots, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(string profileId, IEnumerable<WorkItemSnapshot> snapshots, CancellationToken cancellationToken = default)
     {
-        Directory.CreateDirectory(CacheDirectory);
+        var cachePath = GetCachePath(profileId);
+        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
 
-        var dict = snapshots.ToDictionary(x => x.Key, x => x);
+        var dict = snapshots
+            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+            .ToDictionary(x => x.Key, x => x, StringComparer.OrdinalIgnoreCase);
 
-        await using var stream = File.Create(CachePath);
+        await using var stream = File.Create(cachePath);
         await JsonSerializer.SerializeAsync(stream, dict, cancellationToken: cancellationToken);
     }
+
+    private static string GetCachePath(string profileId)
+        => Path.Combine(RootDirectory, profileId, "workitem-cache.json");
 }
