@@ -1,28 +1,93 @@
-using Microsoft.Toolkit.Uwp.Notifications;
+using System.Drawing;
+using System.Windows;
+using System.Windows.Forms;
 
 namespace JiraDesktop.Wpf.Services;
 
-/// <summary>
-/// Sends Windows desktop toast notifications using the UWP Notifications library.
-/// Failures are silently swallowed so that missing notification support never crashes the app.
-/// </summary>
-public class ToastService
+public sealed class ToastService : IDisposable
 {
-    /// <summary>
-    /// Shows an informational toast notification with the specified title and message.
-    /// </summary>
-    public void ShowInfo(string title, string message)
+    private NotifyIcon? _notifyIcon;
+    private CancellationTokenSource? _disposeCts;
+
+    public void ShowInfo(string title, string message) => _ = ShowAsync(title, message, ToolTipIcon.Info);
+    public void ShowSuccess(string title, string message) => _ = ShowAsync(title, message, ToolTipIcon.Info);
+    public void ShowError(string title, string message) => _ = ShowAsync(title, message, ToolTipIcon.Error);
+
+    private async Task ShowAsync(string title, string message, ToolTipIcon icon)
     {
         try
         {
-            new ToastContentBuilder()
-                .AddText(title)
-                .AddText(message)
-                .GetToastContent();
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is not null && !dispatcher.CheckAccess())
+            {
+                await dispatcher.InvokeAsync(() => ShowCore(title, message, icon));
+                return;
+            }
+
+            ShowCore(title, message, icon);
         }
         catch
         {
-            // swallow if toast unavailable on machine
         }
+    }
+
+    private void ShowCore(string title, string message, ToolTipIcon icon)
+    {
+        try
+        {
+            _disposeCts?.Cancel();
+            _notifyIcon ??= new NotifyIcon
+            {
+                Icon = SystemIcons.Information,
+                Text = "Jira Desktop"
+            };
+
+            _notifyIcon.Visible = true;
+            _notifyIcon.BalloonTipTitle = title;
+            _notifyIcon.BalloonTipText = message;
+            _notifyIcon.BalloonTipIcon = icon;
+            _notifyIcon.ShowBalloonTip(5000);
+
+            _disposeCts = new CancellationTokenSource();
+            _ = DisposeIconLaterAsync(_disposeCts.Token);
+        }
+        catch
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposeCts?.Cancel();
+        DisposeIcon();
+    }
+
+    private async Task DisposeIconLaterAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(6000, cancellationToken);
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher is null || dispatcher.CheckAccess())
+                    DisposeIcon();
+                else
+                    await dispatcher.InvokeAsync(DisposeIcon);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private void DisposeIcon()
+    {
+        if (_notifyIcon is null)
+            return;
+
+        _notifyIcon.Visible = false;
+        _notifyIcon.Dispose();
+        _notifyIcon = null;
     }
 }

@@ -1,6 +1,9 @@
 using System.Globalization;
-using System.Windows.Data;
-using System.Windows.Media;
+using Binding = System.Windows.Data.Binding;
+using IValueConverter = System.Windows.Data.IValueConverter;
+using Brush = System.Windows.Media.Brush;
+using Color = System.Windows.Media.Color;
+using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace JiraDesktop.Wpf.Converters;
 

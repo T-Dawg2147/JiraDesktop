@@ -3,11 +3,6 @@ using JiraDesktop.Core.Models;
 
 namespace JiraDesktop.Core.Services;
 
-/// <summary>
-/// Orchestrates a full dashboard refresh cycle: fetches current work items from Jira,
-/// compares them against the cached snapshot to detect field changes, persists an updated
-/// snapshot, and returns a ready-to-display <see cref="DashboardResult"/>.
-/// </summary>
 public sealed class DashboardService
 {
     private readonly IJiraService _jiraService;
@@ -19,36 +14,30 @@ public sealed class DashboardService
         _cacheService = cacheService;
     }
 
-    /// <summary>
-    /// Delegates to <see cref="IJiraService.GetAllProductManagerOptionsAsync"/> to obtain
-    /// all valid Product Manager filter values from the Jira custom field definition.
-    /// </summary>
     public Task<List<string>> GetAllProductManagerOptionsAsync(CancellationToken ct = default)
         => _jiraService.GetAllProductManagerOptionsAsync(ct);
 
-    /// <summary>
-    /// Loads the full dashboard: fetches work items, detects changes against the previous
-    /// snapshot, saves the new snapshot, and returns the aggregated result.
-    /// </summary>
-    /// <param name="productManager">Optional PM filter ("All" or <c>null</c> to fetch everything).</param>
-    /// <param name="assignee">Optional assignee filter.</param>
-    /// <param name="ct">Cancellation token.</param>
-    public async Task<DashboardResult> LoadDashboardAsync(string? productManager, string? assignee,
-        CancellationToken ct = default)
+    public async Task<DashboardResult> LoadDashboardAsync(string profileId, CancellationToken ct = default)
     {
-        var previous = await _cacheService.LoadAsync(ct);
-        var current = await _jiraService.GetWorkItemsAsync(productManager, assignee, ct);
+        var previous = await _cacheService.LoadAsync(profileId, ct);
+        var current = await _jiraService.GetWorkItemsAsync(ct);
 
         foreach (var item in current)
         {
-            if (previous.TryGetValue(item.Key, out var prev))
+            if (!previous.TryGetValue(item.Key, out var snapshot))
+                continue;
+
+            AddIfChanged(item, "Summary", snapshot.Summary, item.Summary);
+            AddIfChanged(item, "Assignee", snapshot.Assignee, item.Assignee);
+            AddIfChanged(item, "Priority", snapshot.Priority, item.Priority);
+            AddIfChanged(item, "Status", snapshot.Status, item.Status);
+            AddIfChanged(item, "Due Date", snapshot.DueDate, item.DueDate?.ToString("yyyy-MM-dd") ?? string.Empty);
+            AddIfChanged(item, "Product Manager", snapshot.ProductManager, item.ProductManager);
+
+            if (item.Changes.Count > 0)
             {
-                AddIfChanged(item, "summary", prev.Summary, item.Summary);
-                AddIfChanged(item, "assignee", prev.Assignee, item.Assignee);
-                AddIfChanged(item, "priority", prev.Priority, item.Priority);
-                AddIfChanged(item, "status", prev.Status, item.Status);
-                AddIfChanged(item, "duedate", prev.DueDate, item.DueDate?.ToString("yyyy-MM-dd") ?? "");
-                AddIfChanged(item, "Product Managers", prev.ProductManager, item.ProductManager);
+                item.HasDetectedChanges = true;
+                item.IsPulseActive = true;
             }
         }
 
@@ -59,39 +48,48 @@ public sealed class DashboardService
             Assignee = x.Assignee,
             Priority = x.Priority,
             Status = x.Status,
-            DueDate = x.DueDate?.ToString("yyyy-MM-dd") ?? "",
+            DueDate = x.DueDate?.ToString("yyyy-MM-dd") ?? string.Empty,
             ProductManager = x.ProductManager,
             Updated = x.Updated
         });
 
-        await _cacheService.SaveAsync(snapshots, ct);
+        await _cacheService.SaveAsync(profileId, snapshots, ct);
 
-        var result = new DashboardResult
+        return new DashboardResult
         {
-            Items = current.OrderByDescending(x => x.Updated).ToList(),
+            Items = current,
             ProductManagers = current
-                .SelectMany(x => x.ProductManager.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                .Distinct().Order().ToList(),
+                .SelectMany(x => SplitCsv(x.ProductManager))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList(),
             Assignees = current
                 .Select(x => x.Assignee)
                 .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct().Order().ToList()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList()
         };
-
-        return result;
     }
+
+    private static IEnumerable<string> SplitCsv(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static void AddIfChanged(WorkItem item, string field, string oldValue, string newValue)
     {
-        if (!string.Equals(oldValue.Trim(), newValue?.Trim(), StringComparison.OrdinalIgnoreCase))
+        var before = string.IsNullOrWhiteSpace(oldValue) ? "-" : oldValue.Trim();
+        var after = string.IsNullOrWhiteSpace(newValue) ? "-" : newValue.Trim();
+        if (string.Equals(before, after, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        item.Changes.Add(new WorkItemFieldChange
         {
-            item.Changes.Add(new WorkItemFieldChange
-            {
-                Field = field,
-                FromValue = string.IsNullOrWhiteSpace(oldValue) ? "-" : oldValue,
-                ToValue = string.IsNullOrWhiteSpace(newValue) ? "-" : newValue,
-                ChangedAt = DateTime.UtcNow
-            });
-        }
+            Field = field,
+            FromValue = before,
+            ToValue = after,
+            ChangedAt = DateTime.UtcNow
+        });
     }
 }

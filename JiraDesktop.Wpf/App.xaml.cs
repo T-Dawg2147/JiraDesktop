@@ -9,13 +9,8 @@ using Microsoft.Extensions.Hosting;
 
 namespace JiraDesktop.Wpf;
 
-/// <summary>
-/// Application entry point. Bootstraps the .NET Generic Host, registers all services
-/// via dependency injection, and launches the main window.
-/// </summary>
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
-    /// <summary>The application's DI host, accessible for manual service resolution if needed.</summary>
     public static IHost AppHost { get; private set; } = null!;
 
     public App()
@@ -28,22 +23,18 @@ public partial class App : Application
             })
             .ConfigureServices((context, services) =>
             {
-                // Configuration
                 services.Configure<JiraOptions>(context.Configuration.GetSection("Jira"));
                 services.Configure<JiraOAuthOptions>(context.Configuration.GetSection("JiraOAuth"));
 
-                // Core services
                 services.AddSingleton<IWorkItemCacheService, FileWorkItemCacheService>();
                 services.AddHttpClient<IJiraOAuthService, JiraOAuthService>();
                 services.AddHttpClient<IJiraService, JiraService>();
                 services.AddSingleton<DashboardService>();
-                services.AddSingleton<UserSettingsService>();
+                services.AddSingleton<UserProfileService>();
 
-                // WPF-specific services
                 services.AddSingleton<ThemeService>();
                 services.AddSingleton<ToastService>();
 
-                // View models and windows
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
             })
@@ -53,8 +44,7 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         await AppHost.StartAsync();
-        var window = AppHost.Services.GetRequiredService<MainWindow>();
-        window.Show();
+        AppHost.Services.GetRequiredService<MainWindow>().Show();
         base.OnStartup(e);
     }
 
