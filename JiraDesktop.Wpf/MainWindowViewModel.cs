@@ -641,8 +641,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (SelectedWorkItem is null)
             return;
 
-        SelectedWorkItem.AvailableTransitions.Clear();
-        SelectedWorkItem.SelectedTransitionId = string.Empty;
+        var selectedItem = SelectedWorkItem;
+        var selectedKey = selectedItem.Key;
+
+        selectedItem.AvailableTransitions.Clear();
+        selectedItem.SelectedTransitionId = string.Empty;
 
         if (!CanEditSelectedWorkItem || !IsConnected)
             return;
@@ -650,12 +653,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         IsLoadingTransitions = true;
         try
         {
-            var transitions = await _jiraService.GetAvailableTransitionsAsync(SelectedWorkItem.Key);
-            foreach (var transition in transitions)
-                SelectedWorkItem.AvailableTransitions.Add(transition);
+            var transitions = await _jiraService.GetAvailableTransitionsAsync(selectedKey);
+            if (!ReferenceEquals(SelectedWorkItem, selectedItem) ||
+                !string.Equals(SelectedWorkItem?.Key, selectedKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
 
-            if (SelectedWorkItem.AvailableTransitions.Count == 1)
-                SelectedWorkItem.SelectedTransitionId = SelectedWorkItem.AvailableTransitions[0].Id;
+            foreach (var transition in transitions)
+                selectedItem.AvailableTransitions.Add(transition);
+
+            if (selectedItem.AvailableTransitions.Count == 1)
+                selectedItem.SelectedTransitionId = selectedItem.AvailableTransitions[0].Id;
         }
         catch (Exception ex)
         {
@@ -824,18 +833,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _autosaveCts = new CancellationTokenSource();
         var token = _autosaveCts.Token;
 
-        _ = Task.Run(async () =>
+        _ = DelayedAutosaveAsync(token);
+    }
+
+    private async Task DelayedAutosaveAsync(CancellationToken token)
+    {
+        try
         {
-            try
-            {
-                await Task.Delay(300, token);
-                if (!token.IsCancellationRequested)
-                    await PersistCurrentProfileAsync();
-            }
-            catch
-            {
-            }
-        }, token);
+            await Task.Delay(300, token);
+            if (!token.IsCancellationRequested)
+                await PersistCurrentProfileAsync();
+        }
+        catch
+        {
+        }
     }
 
     private void StartSyncTimer()

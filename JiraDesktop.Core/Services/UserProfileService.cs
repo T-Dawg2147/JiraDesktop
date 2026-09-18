@@ -87,6 +87,16 @@ public sealed class UserProfileService
     public async Task SetActiveProfileAsync(string profileId, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(StoreDirectory);
+        if (!File.Exists(ProfilesPath))
+            throw new InvalidOperationException("No profiles exist to activate.");
+
+        await using (var stream = File.OpenRead(ProfilesPath))
+        {
+            var profiles = await JsonSerializer.DeserializeAsync<List<UserProfile>>(stream, cancellationToken: cancellationToken) ?? [];
+            if (profiles.All(x => !string.Equals(x.Id, profileId, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"Profile '{profileId}' does not exist.");
+        }
+
         await File.WriteAllTextAsync(ActiveProfilePath, profileId, cancellationToken);
     }
 
