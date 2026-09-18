@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Windows;
 using System.Windows.Forms;
 
 namespace JiraDesktop.Wpf.Services;
@@ -49,7 +50,13 @@ public sealed class ToastService : IDisposable
         {
             await Task.Delay(6000, cancellationToken);
             if (!cancellationToken.IsCancellationRequested)
-                DisposeIcon();
+            {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher is null || dispatcher.CheckAccess())
+                    DisposeIcon();
+                else
+                    await dispatcher.InvokeAsync(DisposeIcon);
+            }
         }
         catch
         {

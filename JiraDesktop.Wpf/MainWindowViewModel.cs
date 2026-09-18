@@ -162,12 +162,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (ReferenceEquals(_selectedProfile, value))
                 return;
 
-            _selectedProfile = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(CanManageProfiles));
-            OnPropertyChanged(nameof(CurrentRoleLabel));
-            OnPropertyChanged(nameof(CanEditSelectedWorkItem));
-            RaiseCommandStates();
+            SetSelectedProfileReference(value);
 
             if (value is not null && !_isApplyingProfile)
                 _ = ChangeProfileAsync(value, true);
@@ -419,10 +414,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         try
         {
             if (!ReferenceEquals(_selectedProfile, profile))
-            {
-                _selectedProfile = profile;
-                OnPropertyChanged(nameof(SelectedProfile));
-            }
+                SetSelectedProfileReference(profile);
 
             var settings = profile.Settings ?? new UserWidgetSettings();
             AlwaysOnTop = settings.AlwaysOnTop;
@@ -748,6 +740,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (SelectedProfile is null)
             return;
+        if (!CanManageProfiles)
+        {
+            StatusText = "Only admins can change account details.";
+            return;
+        }
 
         await PersistCurrentProfileAsync();
         await _profileService.UpsertProfileAsync(SelectedProfile);
@@ -801,6 +798,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (SelectedProfile is null)
             return;
 
+        var existingSettings = SelectedProfile.Settings ?? new UserWidgetSettings();
         SelectedProfile.Settings = new UserWidgetSettings
         {
             AlwaysOnTop = AlwaysOnTop,
@@ -815,10 +813,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             SelectedAssignee = SelectedAssignee,
             SortField = _sortField,
             SortAscending = _sortDirection == ListSortDirection.Ascending,
-            WindowLeft = _window?.Left ?? SelectedProfile.Settings.WindowLeft,
-            WindowTop = _window?.Top ?? SelectedProfile.Settings.WindowTop,
-            WindowWidth = _window?.Width ?? SelectedProfile.Settings.WindowWidth,
-            WindowHeight = _window?.Height ?? SelectedProfile.Settings.WindowHeight
+            WindowLeft = _window?.Left ?? existingSettings.WindowLeft,
+            WindowTop = _window?.Top ?? existingSettings.WindowTop,
+            WindowWidth = _window?.Width ?? existingSettings.WindowWidth,
+            WindowHeight = _window?.Height ?? existingSettings.WindowHeight
         };
 
         await _profileService.UpsertProfileAsync(SelectedProfile);
@@ -908,6 +906,37 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private static int ParseInt(string? value, int fallback)
         => int.TryParse(value, out var parsed) ? parsed : fallback;
+
+    private void SetSelectedProfileReference(UserProfile? profile)
+    {
+        if (ReferenceEquals(_selectedProfile, profile))
+            return;
+
+        if (_selectedProfile is not null)
+            _selectedProfile.PropertyChanged -= SelectedProfileOnPropertyChanged;
+
+        _selectedProfile = profile;
+
+        if (_selectedProfile is not null)
+            _selectedProfile.PropertyChanged += SelectedProfileOnPropertyChanged;
+
+        OnPropertyChanged(nameof(SelectedProfile));
+        OnPropertyChanged(nameof(CanManageProfiles));
+        OnPropertyChanged(nameof(CurrentRoleLabel));
+        OnPropertyChanged(nameof(CanEditSelectedWorkItem));
+        RaiseCommandStates();
+    }
+
+    private void SelectedProfileOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(UserProfile.Role) or nameof(UserProfile.ManagedProductManager) or nameof(UserProfile.DisplayName))
+        {
+            OnPropertyChanged(nameof(CanManageProfiles));
+            OnPropertyChanged(nameof(CurrentRoleLabel));
+            OnPropertyChanged(nameof(CanEditSelectedWorkItem));
+            RaiseCommandStates();
+        }
+    }
 
     private void OpenWorkItemInBrowser(WorkItem? item)
     {

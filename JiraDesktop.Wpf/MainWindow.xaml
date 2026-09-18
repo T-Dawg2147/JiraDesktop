@@ -158,14 +158,14 @@
                     <TextBlock Text="Active profile" Foreground="{StaticResource BrushSubtle}"/>
                     <ComboBox Margin="0,4,0,10" ItemsSource="{Binding Profiles}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedProfile}" />
                     <TextBlock Text="Display name" Foreground="{StaticResource BrushSubtle}"/>
-                    <TextBox Margin="0,4,0,10" Text="{Binding SelectedProfile.DisplayName, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Margin="0,4,0,10" Text="{Binding SelectedProfile.DisplayName, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanManageProfiles}" />
                     <TextBlock Text="Role" Foreground="{StaticResource BrushSubtle}"/>
-                    <ComboBox Margin="0,4,0,10" ItemsSource="{Binding Roles}" SelectedItem="{Binding SelectedProfile.Role}" />
+                    <ComboBox Margin="0,4,0,10" ItemsSource="{Binding Roles}" SelectedItem="{Binding SelectedProfile.Role}" IsEnabled="{Binding CanManageProfiles}" />
                     <TextBlock Text="Managed Product Manager" Foreground="{StaticResource BrushSubtle}"/>
-                    <ComboBox Margin="0,4,0,10" IsEditable="True" ItemsSource="{Binding ProductManagers}" Text="{Binding SelectedProfile.ManagedProductManager, UpdateSourceTrigger=PropertyChanged}" />
+                    <ComboBox Margin="0,4,0,10" IsEditable="True" ItemsSource="{Binding ProductManagers}" Text="{Binding SelectedProfile.ManagedProductManager, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanManageProfiles}" />
                     <TextBlock Text="{Binding CurrentRoleLabel}" Margin="0,0,0,8"/>
                     <WrapPanel Margin="0,0,0,16">
-                        <Button Content="Save account" Width="110" Margin="0,0,8,0" Command="{Binding SaveProfileCommand}"/>
+                        <Button Content="Save account" Width="110" Margin="0,0,8,0" Command="{Binding SaveProfileCommand}" IsEnabled="{Binding CanManageProfiles}"/>
                         <Button Content="Delete" Width="80" Command="{Binding DeleteProfileCommand}"/>
                     </WrapPanel>
 
