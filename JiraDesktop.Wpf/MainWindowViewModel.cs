@@ -688,8 +688,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _toastService.ShowSuccess("Jira Desktop", $"{SelectedWorkItem.Key} moved to {targetName}.");
             IsBusy = false;
             await SyncAsync();
-            SelectedWorkItem = Items.FirstOrDefault(x => string.Equals(x.Key, selectedKey, StringComparison.OrdinalIgnoreCase));
-            StatusText = $"Updated {SelectedWorkItem.Key} to {targetName}";
+            var refreshedSelection = Items.FirstOrDefault(x => string.Equals(x.Key, selectedKey, StringComparison.OrdinalIgnoreCase));
+            SelectedWorkItem = refreshedSelection;
+            StatusText = $"Updated {selectedKey} to {targetName}";
         }
         catch (Exception ex)
         {

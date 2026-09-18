@@ -190,7 +190,7 @@
                     </WrapPanel>
 
                     <Separator Margin="0,0,0,12"/>
-                    <TextBlock Text="View & notifications" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="View &amp; notifications" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
                     <CheckBox Content="Always on top" IsChecked="{Binding AlwaysOnTop}" Margin="0,0,0,8"/>
                     <CheckBox Content="Desktop notifications for selected PM" IsChecked="{Binding EnableChangeNotifications}" Margin="0,0,0,8"/>
                     <CheckBox Content="Play notification sound" IsChecked="{Binding EnableNotificationSound}" Margin="0,0,0,12"/>

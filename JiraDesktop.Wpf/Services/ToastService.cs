@@ -1,24 +1,38 @@
-using Microsoft.Toolkit.Uwp.Notifications;
+using System.Drawing;
+using System.Windows.Forms;
 
 namespace JiraDesktop.Wpf.Services;
 
-public sealed class ToastService
+public sealed class ToastService : IDisposable
 {
-    public void ShowInfo(string title, string message) => Show(title, message);
-    public void ShowSuccess(string title, string message) => Show(title, message);
-    public void ShowError(string title, string message) => Show(title, message);
+    private readonly NotifyIcon _notifyIcon = new()
+    {
+        Visible = true,
+        Icon = SystemIcons.Information,
+        Text = "Jira Desktop"
+    };
 
-    private static void Show(string title, string message)
+    public void ShowInfo(string title, string message) => Show(title, message, ToolTipIcon.Info);
+    public void ShowSuccess(string title, string message) => Show(title, message, ToolTipIcon.Info);
+    public void ShowError(string title, string message) => Show(title, message, ToolTipIcon.Error);
+
+    private void Show(string title, string message, ToolTipIcon icon)
     {
         try
         {
-            new ToastContentBuilder()
-                .AddText(title)
-                .AddText(message)
-                .Show();
+            _notifyIcon.BalloonTipTitle = title;
+            _notifyIcon.BalloonTipText = message;
+            _notifyIcon.BalloonTipIcon = icon;
+            _notifyIcon.ShowBalloonTip(5000);
         }
         catch
         {
         }
+    }
+
+    public void Dispose()
+    {
+        _notifyIcon.Visible = false;
+        _notifyIcon.Dispose();
     }
 }

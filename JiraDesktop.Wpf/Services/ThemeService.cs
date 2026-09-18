@@ -14,7 +14,7 @@ public class ThemeService
     /// </summary>
     public void ApplyTheme(string themeName)
     {
-        var app = Application.Current;
+        var app = System.Windows.Application.Current;
         if (app == null) return;
 
         var dictionaries = app.Resources.MergedDictionaries;
