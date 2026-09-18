@@ -482,12 +482,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task SyncAsync()
+    private Task SyncAsync()
+        => SyncCoreAsync(allowWhenBusy: false);
+
+    private async Task SyncCoreAsync(bool allowWhenBusy)
     {
-        if (SelectedProfile is null || IsBusy)
+        if (SelectedProfile is null || (!allowWhenBusy && IsBusy))
             return;
 
-        IsBusy = true;
+        if (!allowWhenBusy)
+            IsBusy = true;
+
         try
         {
             StatusText = $"Syncing Jira for {SelectedProfile.DisplayName}...";
@@ -517,7 +522,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsBusy = false;
+            if (!allowWhenBusy)
+                IsBusy = false;
         }
     }
 
@@ -686,8 +692,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             StatusText = $"Updating {SelectedWorkItem.Key}...";
             await _jiraService.UpdateWorkItemStatusAsync(SelectedWorkItem.Key, SelectedWorkItem.SelectedTransitionId);
             _toastService.ShowSuccess("Jira Desktop", $"{SelectedWorkItem.Key} moved to {targetName}.");
-            IsBusy = false;
-            await SyncAsync();
+            await SyncCoreAsync(allowWhenBusy: true);
             var refreshedSelection = Items.FirstOrDefault(x => string.Equals(x.Key, selectedKey, StringComparison.OrdinalIgnoreCase));
             SelectedWorkItem = refreshedSelection;
             StatusText = $"Updated {selectedKey} to {targetName}";

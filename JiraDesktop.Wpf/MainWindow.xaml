@@ -99,15 +99,28 @@
                     <DataGridTemplateColumn Header="Key" Width="100" SortMemberPath="Key">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Button Content="{Binding Key}"
-                                        Background="Transparent"
+                                <Button Background="Transparent"
+                                        BorderBrush="{StaticResource BrushPrimary}"
                                         BorderThickness="0"
                                         Foreground="{StaticResource BrushPrimary}"
                                         Cursor="Hand"
                                         HorizontalAlignment="Left"
                                         Padding="0"
                                         Command="{Binding DataContext.OpenWorkItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding}"/>
+                                        CommandParameter="{Binding}">
+                                    <TextBlock Text="{Binding Key}" TextDecorations="Underline"/>
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                    <Setter Property="Background" Value="#1A2563EB"/>
+                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                    <Setter Property="Padding" Value="2"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

@@ -18,7 +18,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await _vm.InitializeAsync(this);
         LocationChanged += async (_, _) => await _vm.SaveWindowSettingsAsync(this);
         SizeChanged += async (_, _) => await _vm.SaveWindowSettingsAsync(this);
-        Closing += async (_, _) => await _vm.SaveWindowSettingsAsync(this);
+        Closing += (_, _) => _vm.SaveWindowSettingsAsync(this).GetAwaiter().GetResult();
     }
 
     private void IssuesGrid_OnSorting(object sender, DataGridSortingEventArgs e)

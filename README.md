@@ -19,7 +19,7 @@ JiraDesktop is a WPF desktop tracker for a single Jira project with local user p
 
 ## Configuration
 
-Update `/home/runner/work/JiraDesktop/JiraDesktop/JiraDesktop.Wpf/appsettings.json` with your Jira values.
+Update `JiraDesktop.Wpf/appsettings.json` with your Jira values.
 
 ```json
 {
@@ -41,8 +41,8 @@ Update `/home/runner/work/JiraDesktop/JiraDesktop/JiraDesktop.Wpf/appsettings.js
 ## Run
 
 ```sh
-dotnet build /home/runner/work/JiraDesktop/JiraDesktop/JiraDesktop.sln
-dotnet run --project /home/runner/work/JiraDesktop/JiraDesktop/JiraDesktop.Wpf
+dotnet build JiraDesktop.sln
+dotnet run --project JiraDesktop.Wpf
 ```
 
 ## Local storage
