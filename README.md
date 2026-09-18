@@ -17,6 +17,8 @@ JiraDesktop is a WPF desktop tracker for a single Jira project with local user p
 - **ProductManager**: update job statuses only for jobs whose Product Manager matches the profile's managed Product Manager value
 - **Viewer**: read-only access
 
+These roles are local app profiles for tailoring the desktop experience. Jira still enforces the real server-side permissions for status transitions.
+
 ## Configuration
 
 Update `JiraDesktop.Wpf/appsettings.json` with your Jira values.

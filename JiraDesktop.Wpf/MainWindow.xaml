@@ -106,6 +106,7 @@
                                         Cursor="Hand"
                                         HorizontalAlignment="Left"
                                         Padding="0"
+                                        ToolTip="Open this issue in Jira"
                                         Command="{Binding DataContext.OpenWorkItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding}">
                                     <TextBlock Text="{Binding Key}" TextDecorations="Underline"/>
@@ -164,6 +165,10 @@
                     <TextBlock Text="Managed Product Manager" Foreground="{StaticResource BrushSubtle}"/>
                     <ComboBox Margin="0,4,0,10" IsEditable="True" ItemsSource="{Binding ProductManagers}" Text="{Binding SelectedProfile.ManagedProductManager, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanManageProfiles}" />
                     <TextBlock Text="{Binding CurrentRoleLabel}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Local roles shape the desktop experience only. Jira permissions still control whether a status update is allowed."
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource BrushSubtle}"
+                               Margin="0,0,0,8"/>
                     <WrapPanel Margin="0,0,0,16">
                         <Button Content="Save account" Width="110" Margin="0,0,8,0" Command="{Binding SaveProfileCommand}" IsEnabled="{Binding CanManageProfiles}"/>
                         <Button Content="Delete" Width="80" Command="{Binding DeleteProfileCommand}"/>

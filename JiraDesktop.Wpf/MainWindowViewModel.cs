@@ -34,6 +34,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private Window? _window;
     private DispatcherTimer? _syncTimer;
     private CancellationTokenSource? _autosaveCts;
+    private CancellationTokenSource? _transitionLoadCts;
     private bool _isApplyingProfile;
     private bool _isChangingProfile;
     private bool _isBusy;
@@ -635,19 +636,28 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         var selectedItem = SelectedWorkItem;
         var selectedKey = selectedItem.Key;
+        _transitionLoadCts?.Cancel();
+        _transitionLoadCts = new CancellationTokenSource();
+        var activeLoad = _transitionLoadCts;
+        var transitionToken = _transitionLoadCts.Token;
 
         selectedItem.AvailableTransitions.Clear();
         selectedItem.SelectedTransitionId = string.Empty;
 
         if (!CanEditSelectedWorkItem || !IsConnected)
+        {
+            IsLoadingTransitions = false;
+            RaiseCommandStates();
             return;
+        }
 
         IsLoadingTransitions = true;
         try
         {
-            var transitions = await _jiraService.GetAvailableTransitionsAsync(selectedKey);
+            var transitions = await _jiraService.GetAvailableTransitionsAsync(selectedKey, transitionToken);
             if (!ReferenceEquals(SelectedWorkItem, selectedItem) ||
-                !string.Equals(SelectedWorkItem?.Key, selectedKey, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(SelectedWorkItem?.Key, selectedKey, StringComparison.OrdinalIgnoreCase) ||
+                transitionToken.IsCancellationRequested)
             {
                 return;
             }
@@ -658,14 +668,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (selectedItem.AvailableTransitions.Count == 1)
                 selectedItem.SelectedTransitionId = selectedItem.AvailableTransitions[0].Id;
         }
+        catch (OperationCanceledException)
+        {
+        }
         catch (Exception ex)
         {
             StatusText = $"Transition load failed: {ex.Message}";
         }
         finally
         {
-            IsLoadingTransitions = false;
-            RaiseCommandStates();
+            if (ReferenceEquals(_transitionLoadCts, activeLoad))
+            {
+                IsLoadingTransitions = false;
+                RaiseCommandStates();
+            }
         }
     }
 

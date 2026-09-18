@@ -5,6 +5,7 @@ namespace JiraDesktop.Core.Services;
 
 public sealed class UserProfileService
 {
+    private static readonly SemaphoreSlim ProfilesWriteLock = new(1, 1);
     private static readonly string StoreDirectory =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JiraDesktop");
 
@@ -111,11 +112,28 @@ public sealed class UserProfileService
     private static async Task SaveProfilesAsync(List<UserProfile> profiles, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(StoreDirectory);
-        await using var stream = File.Create(ProfilesPath);
-        await JsonSerializer.SerializeAsync(stream, profiles.OrderBy(x => x.DisplayName), new JsonSerializerOptions
+        var tempPath = $"{ProfilesPath}.tmp";
+
+        await ProfilesWriteLock.WaitAsync(cancellationToken);
+        try
         {
-            WriteIndented = true
-        }, cancellationToken);
+            await using (var stream = File.Create(tempPath))
+            {
+                await JsonSerializer.SerializeAsync(stream, profiles.OrderBy(x => x.DisplayName), new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                }, cancellationToken);
+            }
+
+            File.Move(tempPath, ProfilesPath, overwrite: true);
+        }
+        finally
+        {
+            ProfilesWriteLock.Release();
+
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
     }
 
     private static List<UserProfile> CreateDefaultProfiles()

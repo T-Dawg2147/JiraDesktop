@@ -9,11 +9,29 @@ public sealed class ToastService : IDisposable
     private NotifyIcon? _notifyIcon;
     private CancellationTokenSource? _disposeCts;
 
-    public void ShowInfo(string title, string message) => Show(title, message, ToolTipIcon.Info);
-    public void ShowSuccess(string title, string message) => Show(title, message, ToolTipIcon.Info);
-    public void ShowError(string title, string message) => Show(title, message, ToolTipIcon.Error);
+    public void ShowInfo(string title, string message) => _ = ShowAsync(title, message, ToolTipIcon.Info);
+    public void ShowSuccess(string title, string message) => _ = ShowAsync(title, message, ToolTipIcon.Info);
+    public void ShowError(string title, string message) => _ = ShowAsync(title, message, ToolTipIcon.Error);
 
-    private void Show(string title, string message, ToolTipIcon icon)
+    private async Task ShowAsync(string title, string message, ToolTipIcon icon)
+    {
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is not null && !dispatcher.CheckAccess())
+            {
+                await dispatcher.InvokeAsync(() => ShowCore(title, message, icon));
+                return;
+            }
+
+            ShowCore(title, message, icon);
+        }
+        catch
+        {
+        }
+    }
+
+    private void ShowCore(string title, string message, ToolTipIcon icon)
     {
         try
         {
